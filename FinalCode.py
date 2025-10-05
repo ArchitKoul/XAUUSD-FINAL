@@ -148,27 +148,4 @@ seven_day_low = df['low'].tail(7 * 24).min()
 col1, col2 = st.columns(2)
 with col1:
     st.subheader("⚔️ Signal")
-    direction_map = {0: "Sell", 1: "Hold", 2: "Buy"}
-    st.metric("Prediction", direction_map[latest_signal])
-    st.metric("Confidence", f"{latest_confidence:.2f}")
-    st.metric("Stop Loss", f"${df['ATR'].iloc[-1] * 1.5:.2f}")
-    st.metric("Take Profit", f"${df['ATR'].iloc[-1] * 2.5:.2f}")
-    st.write(f"Signal Time: {df['datetime'].iloc[-1].strftime('%I:%M %p')}")
-
-with col2:
-    st.subheader("💰 Price Overview")
-    st.metric("Current Price", f"${current_price:.2f}")
-    st.metric("7-Day High", f"${seven_day_high:.2f}")
-    st.metric("7-Day Low", f"${seven_day_low:.2f}")
-
-# 🌐 Macro Overlay (static for now)
-st.subheader("🌐 Macro Overlay")
-macro_col1, macro_col2, macro_col3 = st.columns(3)
-macro_col1.metric("DXY (Dollar Index)", "106.12")
-macro_col2.metric("US CPI YoY", "3.7%")
-macro_col3.metric("Fed Funds Rate", "5.50%")
-st.caption("Next macro event: US CPI release on Oct 10, 2025")
-
-# Strategy simulation
-df['Position'] = df['Signal'].replace({0: -1, 1: 0, 2: 1})
-df['Market_Return'] = df
+    direction_map = {0: "Sell
