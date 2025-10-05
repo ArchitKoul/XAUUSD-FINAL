@@ -155,7 +155,7 @@ sharpe = df['Strategy_Return'].mean() / df['Strategy_Return'].std() * np.sqrt(25
 st.subheader("📊 Strategy Performance")
 fig, ax = plt.subplots(figsize=(10, 4))
 ax.plot(df['datetime'], df['Cumulative_Market'], label='Market', color='gray')
-ax.plot(df['datetime'], df['Cumulative_Strategy'], label='Strategy", color='blue')
+ax.plot(df['datetime'], df['Cumulative_Strategy'], label='Strategy', color='blue')
 ax.set_title("Cumulative Returns")
 ax.legend()
 st.pyplot(fig)
@@ -171,5 +171,4 @@ log_df = df[['datetime', 'Signal', 'Strategy_Return', 'ATR']].copy()
 log_df['Direction'] = log_df['Signal'].replace({0: 'Sell', 1: 'Hold', 2: 'Buy'})
 log_df['Confidence'] = model.predict_proba(X)[np.arange(len(X)), df['Signal']]
 log_df['Stop_Loss'] = log_df['ATR'] * 1.5
-log_df['Take_Profit'] = log_df['ATR'] * 2.5
-log_df['Strategy_Return'] = log_df['Strategy_Return'].round
+log_df['Take_Profit'] = log_df['
