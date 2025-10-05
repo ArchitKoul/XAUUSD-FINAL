@@ -20,6 +20,7 @@ retrain_interval = st.sidebar.selectbox("Retrain every...", ["Every refresh", "5
 use_price_action = st.sidebar.checkbox("Enable Price Action Strategy")
 chart_interval = st.sidebar.selectbox("Chart timeframe", ["15min", "30min", "4h", "1day"])
 enable_us_open_strategy = st.sidebar.checkbox("Enable US Open Sell Strategy")
+ATR_THRESHOLD = st.sidebar.slider("ATR Threshold (Volatility Filter)", min_value=5, max_value=30, value=15)
 
 # Retrain logic
 if "last_retrain" not in st.session_state:
@@ -230,7 +231,7 @@ if enable_us_open_strategy:
     # Strategy parameters
     SL = 100
     TP = 200
-    ATR_THRESHOLD = 15
+    ATR_THRESHOLD = 10
 
     us_open_trades = []
     for date in df['date'].unique():
