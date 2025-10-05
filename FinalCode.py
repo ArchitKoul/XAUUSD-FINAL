@@ -305,7 +305,6 @@ else:
     # Display results
     st.subheader("📊 Monthly Backtest Results (US Open Sell Strategy)")
     st.bar_chart(monthly['Total_PnL'])
-
     st.dataframe(monthly.reset_index(), use_container_width=True)
 
     # Cumulative performance
