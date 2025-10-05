@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 from xgboost import XGBClassifier
 from sklearn.linear_model import LogisticRegression
 from streamlit_autorefresh import st_autorefresh
+import matplotlib.pyplot as plt
 
 # Auto-refresh every 60 seconds
 st_autorefresh(interval=60000, limit=None, key="refresh")
