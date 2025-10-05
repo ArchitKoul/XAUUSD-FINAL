@@ -5,3 +5,5 @@ matplotlib
 requests
 streamlit-autorefresh
 plotly
+xgboost
+scikit-learn
