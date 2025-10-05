@@ -2,8 +2,9 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import requests
+import matplotlib.pyplot as plt
 from xgboost import XGBClassifier
-from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
 from streamlit_autorefresh import st_autorefresh
 
 # Auto-refresh every 60 seconds
@@ -12,6 +13,10 @@ st_autorefresh(interval=60000, limit=None, key="refresh")
 # Streamlit layout
 st.set_page_config(layout="wide")
 st.title("📡 XAUUSD ML Signal Dashboard")
+
+# Sidebar model selector
+st.sidebar.title("🧠 Model Selector")
+model_choice = st.sidebar.selectbox("Choose ML Model", ["XGBoost", "Logistic Regression"])
 
 # Fetch real-time data
 API_KEY = "2215ad61f67742a2a6fb9d5043777a45"
@@ -63,15 +68,13 @@ df['ATR'] = tr.ewm(com=14, min_periods=14).mean()
 df['ADX'] = df['close'].rolling(window=14).mean()  # Simplified
 df['Volatility'] = df['close'].rolling(window=20).std()
 
-# Label future movement (remapped for XGBoost)
+# Label future movement
 df['Target'] = np.where(df['close'].shift(-1) > df['close'], 2,
                 np.where(df['close'].shift(-1) < df['close'], 0, 1))
 
 # ML features
 features = ['RSI', 'MACD', 'ADX', 'ATR', 'Volatility', 'Lag1', 'Lag2', 'EMA_Cross']
 df.dropna(inplace=True)
-X = df[features]
-y = df['Target']
 
 # Walk-forward retraining setup
 window_size = 300
@@ -82,7 +85,7 @@ test_df = df.iloc[-1:]
 
 X_train = train_df[features]
 y_train = train_df['Target']
-X_test = test_df[features]
+X_test = test_df[features].to_frame().T
 
 # Train selected model
 if model_choice == "XGBoost":
@@ -93,13 +96,8 @@ elif model_choice == "Logistic Regression":
 model.fit(X_train, y_train)
 
 # Live prediction
-latest = X.iloc[-1:]
-prediction = model.predict(latest)[0]
-confidence = model.predict_proba(latest)[0][prediction]
-
-direction_map = {0: "Sell", 1: "Hold", 2: "Buy"}
-st.metric("Prediction", direction_map[prediction])
-st.metric("Confidence", f"{confidence:.2f}")
+prediction = model.predict(X_test)[0]
+confidence = model.predict_proba(X_test)[0][prediction]
 
 # Current price and 7-day high/low
 current_price = df['close'].iloc[-1]
@@ -124,28 +122,13 @@ with col2:
     st.metric("7-Day High", f"${seven_day_high:.2f}")
     st.metric("7-Day Low", f"${seven_day_low:.2f}")
 
-from sklearn.linear_model import LogisticRegression
-
-# Model selector
-st.sidebar.title("🧠 Model Selector")
-model_choice = st.sidebar.selectbox("Choose ML Model", ["XGBoost", "Logistic Regression"])
-
-# Train selected model
-if model_choice == "XGBoost":
-    model = XGBClassifier(n_estimators=100, max_depth=4, learning_rate=0.1)
-elif model_choice == "Logistic Regression":
-    model = LogisticRegression(max_iter=1000)
-
-model.fit(X_train, y_train)
-
-##
 # Strategy simulation
+X = df[features]
 df['Signal'] = model.predict(X)
-df['Position'] = df['Signal'].replace({0: -1, 1: 0, 2: 1})  # Sell, Hold, Buy
+df['Position'] = df['Signal'].replace({0: -1, 1: 0, 2: 1})
 df['Market_Return'] = df['Return']
 df['Strategy_Return'] = df['Position'].shift(1) * df['Market_Return']
 
-# Cumulative returns
 df['Cumulative_Market'] = (1 + df['Market_Return']).cumprod()
 df['Cumulative_Strategy'] = (1 + df['Strategy_Return']).cumprod()
 
@@ -159,10 +142,7 @@ avg_loss = df[df['Strategy_Return'] < 0]['Strategy_Return'].mean()
 sharpe = df['Strategy_Return'].mean() / df['Strategy_Return'].std() * np.sqrt(252)
 
 # Plot cumulative performance
-import matplotlib.pyplot as plt
-
 st.subheader("📊 Strategy Performance")
-
 fig, ax = plt.subplots(figsize=(10, 4))
 ax.plot(df['datetime'], df['Cumulative_Market'], label='Market', color='gray')
 ax.plot(df['datetime'], df['Cumulative_Strategy'], label='Strategy', color='blue')
