@@ -19,6 +19,7 @@ model_choice = st.sidebar.selectbox("Choose ML Model", ["XGBoost", "Logistic Reg
 retrain_interval = st.sidebar.selectbox("Retrain every...", ["Every refresh", "5 minutes", "15 minutes", "1 hour"])
 use_price_action = st.sidebar.checkbox("Enable Price Action Strategy")
 chart_interval = st.sidebar.selectbox("Chart timeframe", ["15min", "30min", "4h", "1day"])
+enable_us_open_strategy = st.sidebar.checkbox("Enable US Open Sell Strategy")
 
 # Retrain logic
 if "last_retrain" not in st.session_state:
