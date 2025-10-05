@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import requests
 import matplotlib.pyplot as plt
+import time
 from xgboost import XGBClassifier
 from sklearn.linear_model import LogisticRegression
 from streamlit_autorefresh import st_autorefresh
@@ -14,18 +15,14 @@ st_autorefresh(interval=60000, limit=None, key="refresh")
 st.set_page_config(layout="wide")
 st.title("📡 XAUUSD ML Signal Dashboard")
 
-# Sidebar model selector
+# Sidebar controls
 st.sidebar.title("🧠 Model Selector")
-model_choice = st.sidebar.selectbox("Choose ML Model", ["XGBoost", "Logistic Regression"])
+model_choice = st.sidebar.selectbox("Choose ML Model", ["XGBoost", "Logistic Regression"], key="model_selector")
 
 st.sidebar.title("⚙️ Retrain Settings")
-retrain_interval = st.sidebar.selectbox("Retrain every...", ["Every refresh", "5 minutes", "15 minutes", "1 hour"])
+retrain_interval = st.sidebar.selectbox("Retrain every...", ["Every refresh", "5 minutes", "15 minutes", "1 hour"], key="retrain_selector")
 
-# Retrain frequency control
-st.sidebar.title("⚙️ Retrain Settings")
-retrain_interval = st.sidebar.selectbox("Retrain every...", ["Every refresh", "5 minutes", "15 minutes", "1 hour"])
-
-import time
+# Retrain frequency logic
 if "last_retrain" not in st.session_state:
     st.session_state.last_retrain = 0
 
@@ -46,12 +43,10 @@ url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval={interva
 response = requests.get(url)
 data = response.json()
 
-# Error handling
 if 'values' not in data:
     st.error("❌ API Error: No data returned. Check your API key, symbol, or usage limits.")
     st.stop()
 
-# Convert to DataFrame
 df = pd.DataFrame(data['values'])
 df['datetime'] = pd.to_datetime(df['datetime'])
 df = df.sort_values('datetime')
@@ -84,20 +79,18 @@ low_close = np.abs(df['low'] - df['close'].shift())
 tr = pd.concat([high_low, high_close, low_close], axis=1).max(axis=1)
 df['ATR'] = tr.ewm(com=14, min_periods=14).mean()
 
-df['ADX'] = df['close'].rolling(window=14).mean()  # Simplified
+df['ADX'] = df['close'].rolling(window=14).mean()
 df['Volatility'] = df['close'].rolling(window=20).std()
 
-# Label future movement
 df['Target'] = np.where(df['close'].shift(-1) > df['close'], 2,
                 np.where(df['close'].shift(-1) < df['close'], 0, 1))
 
-# ML features
 features = ['RSI', 'MACD', 'ADX', 'ATR', 'Volatility', 'Lag1', 'Lag2', 'EMA_Cross']
 df.dropna(inplace=True)
 
-# Walk-forward retraining setup
+# Walk-forward retraining
 window_size = 300
-df = df.tail(window_size + 1)  # +1 for prediction
+df = df.tail(window_size + 1)
 
 train_df = df.iloc[:-1]
 test_df = df.iloc[-1:]
@@ -106,26 +99,26 @@ X_train = train_df[features]
 y_train = train_df['Target']
 X_test = test_df[features].to_frame() if isinstance(test_df[features], pd.Series) else test_df[features]
 
-# Train selected model
-if model_choice == "XGBoost":
-    model = XGBClassifier(n_estimators=100, max_depth=4, learning_rate=0.1)
-elif model_choice == "Logistic Regression":
-    model = LogisticRegression(max_iter=1000)
-
-model.fit(X_train, y_train)
+if should_retrain or "model" not in st.session_state:
+    if model_choice == "XGBoost":
+        model = XGBClassifier(n_estimators=100, max_depth=4, learning_rate=0.1)
+    elif model_choice == "Logistic Regression":
+        model = LogisticRegression(max_iter=1000)
+    model.fit(X_train, y_train)
+    st.session_state.model = model
+    st.session_state.last_retrain = time.time()
+else:
+    model = st.session_state.model
 
 # Live prediction
 prediction = model.predict(X_test)[0]
 confidence = model.predict_proba(X_test)[0][prediction]
 
-# Current price and 7-day high/low
 current_price = df['close'].iloc[-1]
 seven_day_high = df['high'].tail(7 * 24).max()
 seven_day_low = df['low'].tail(7 * 24).min()
 
-# Display dashboard
 col1, col2 = st.columns(2)
-
 with col1:
     st.subheader("⚔️ ML Signal")
     direction_map = {0: "Sell", 1: "Hold", 2: "Buy"}
@@ -147,7 +140,6 @@ df['Signal'] = model.predict(X)
 df['Position'] = df['Signal'].replace({0: -1, 1: 0, 2: 1})
 df['Market_Return'] = df['Return']
 df['Strategy_Return'] = df['Position'].shift(1) * df['Market_Return']
-
 df['Cumulative_Market'] = (1 + df['Market_Return']).cumprod()
 df['Cumulative_Strategy'] = (1 + df['Strategy_Return']).cumprod()
 
@@ -160,30 +152,24 @@ avg_gain = df[df['Strategy_Return'] > 0]['Strategy_Return'].mean()
 avg_loss = df[df['Strategy_Return'] < 0]['Strategy_Return'].mean()
 sharpe = df['Strategy_Return'].mean() / df['Strategy_Return'].std() * np.sqrt(252)
 
-# Plot cumulative performance
 st.subheader("📊 Strategy Performance")
 fig, ax = plt.subplots(figsize=(10, 4))
 ax.plot(df['datetime'], df['Cumulative_Market'], label='Market', color='gray')
-ax.plot(df['datetime'], df['Cumulative_Strategy'], label='Strategy', color='blue')
+ax.plot(df['datetime'], df['Cumulative_Strategy'], label='Strategy", color='blue')
 ax.set_title("Cumulative Returns")
 ax.legend()
 st.pyplot(fig)
 
-# Display metrics
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Win Rate", f"{win_rate:.2%}")
 col2.metric("Avg Gain", f"{avg_gain:.4f}")
 col3.metric("Avg Loss", f"{avg_loss:.4f}")
 col4.metric("Sharpe Ratio", f"{sharpe:.2f}")
 
-# Trade log table
+# Trade log
 log_df = df[['datetime', 'Signal', 'Strategy_Return', 'ATR']].copy()
 log_df['Direction'] = log_df['Signal'].replace({0: 'Sell', 1: 'Hold', 2: 'Buy'})
 log_df['Confidence'] = model.predict_proba(X)[np.arange(len(X)), df['Signal']]
 log_df['Stop_Loss'] = log_df['ATR'] * 1.5
 log_df['Take_Profit'] = log_df['ATR'] * 2.5
-log_df['Strategy_Return'] = log_df['Strategy_Return'].round(4)
-log_df = log_df[['datetime', 'Direction', 'Confidence', 'Stop_Loss', 'Take_Profit', 'Strategy_Return']]
-
-st.subheader("📋 Trade Log")
-st.dataframe(log_df.tail(20).reset_index(drop=True), use_container_width=True)
+log_df['Strategy_Return'] = log_df['Strategy_Return'].round
