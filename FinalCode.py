@@ -144,3 +144,15 @@ col1.metric("Win Rate", f"{win_rate:.2%}")
 col2.metric("Avg Gain", f"{avg_gain:.4f}")
 col3.metric("Avg Loss", f"{avg_loss:.4f}")
 col4.metric("Sharpe Ratio", f"{sharpe:.2f}")
+
+# Trade log table
+log_df = df[['datetime', 'Signal', 'Strategy_Return', 'ATR']].copy()
+log_df['Direction'] = log_df['Signal'].replace({0: 'Sell', 1: 'Hold', 2: 'Buy'})
+log_df['Confidence'] = model.predict_proba(X)[np.arange(len(X)), df['Signal']]
+log_df['Stop_Loss'] = log_df['ATR'] * 1.5
+log_df['Take_Profit'] = log_df['ATR'] * 2.5
+log_df['Strategy_Return'] = log_df['Strategy_Return'].round(4)
+log_df = log_df[['datetime', 'Direction', 'Confidence', 'Stop_Loss', 'Take_Profit', 'Strategy_Return']]
+
+st.subheader("📋 Trade Log")
+st.dataframe(log_df.tail(20).reset_index(drop=True), use_container_width=True)
