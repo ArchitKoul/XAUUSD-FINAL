@@ -26,7 +26,7 @@ interval_map = {"Every refresh": 0, "5 minutes": 300, "15 minutes": 900, "1 hour
 should_retrain = (time.time() - st.session_state.last_retrain) > interval_map[retrain_interval]
 
 # Fetch real-time data
-API_KEY = "your_api_key_here"
+API_KEY = "2215ad61f67742a2a6fb9d5043777a45"
 symbol = "XAU/USD"
 url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval=5min&apikey={API_KEY}&outputsize=500"
 response = requests.get(url).json()
