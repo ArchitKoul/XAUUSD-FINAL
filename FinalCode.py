@@ -18,6 +18,25 @@ st.title("📡 XAUUSD ML Signal Dashboard")
 st.sidebar.title("🧠 Model Selector")
 model_choice = st.sidebar.selectbox("Choose ML Model", ["XGBoost", "Logistic Regression"])
 
+st.sidebar.title("⚙️ Retrain Settings")
+retrain_interval = st.sidebar.selectbox("Retrain every...", ["Every refresh", "5 minutes", "15 minutes", "1 hour"])
+
+# Retrain frequency control
+st.sidebar.title("⚙️ Retrain Settings")
+retrain_interval = st.sidebar.selectbox("Retrain every...", ["Every refresh", "5 minutes", "15 minutes", "1 hour"])
+
+import time
+if "last_retrain" not in st.session_state:
+    st.session_state.last_retrain = 0
+
+interval_map = {
+    "Every refresh": 0,
+    "5 minutes": 300,
+    "15 minutes": 900,
+    "1 hour": 3600
+}
+should_retrain = (time.time() - st.session_state.last_retrain) > interval_map[retrain_interval]
+
 # Fetch real-time data
 API_KEY = "2215ad61f67742a2a6fb9d5043777a45"
 symbol = "XAU/USD"
