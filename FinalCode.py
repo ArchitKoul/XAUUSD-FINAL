@@ -22,6 +22,8 @@ model_choice = st.sidebar.selectbox("Choose ML Model", ["XGBoost", "Logistic Reg
 st.sidebar.title("⚙️ Retrain Settings")
 retrain_interval = st.sidebar.selectbox("Retrain every...", ["Every refresh", "5 minutes", "15 minutes", "1 hour"], key="retrain_selector")
 
+use_price_action = st.sidebar.checkbox("Enable Price Action Strategy")
+
 # Retrain frequency logic
 if "last_retrain" not in st.session_state:
     st.session_state.last_retrain = 0
@@ -85,6 +87,23 @@ df['Volatility'] = df['close'].rolling(window=20).std()
 df['Target'] = np.where(df['close'].shift(-1) > df['close'], 2,
                 np.where(df['close'].shift(-1) < df['close'], 0, 1))
 
+# Price action features
+df['Body'] = np.abs(df['close'] - df['open'])
+df['Upper_Wick'] = df['high'] - df[['close', 'open']].max(axis=1)
+df['Lower_Wick'] = df[['close', 'open']].min(axis=1) - df['low']
+df['Bullish_Engulfing'] = ((df['close'] > df['open']) & 
+                           (df['close'].shift(1) < df['open'].shift(1)) &
+                           (df['close'] > df['open'].shift(1)) &
+                           (df['open'] < df['close'].shift(1))).astype(int)
+df['Bearish_Engulfing'] = ((df['close'] < df['open']) & 
+                           (df['close'].shift(1) > df['open'].shift(1)) &
+                           (df['close'] < df['open'].shift(1)) &
+                           (df['open'] > df['close'].shift(1))).astype(int)
+df['Price_Action_Signal'] = (
+    (df['close'] > df['high'].shift(1)) & 
+    (df['Bullish_Engulfing'] == 1)
+).astype(int)
+
 features = ['RSI', 'MACD', 'ADX', 'ATR', 'Volatility', 'Lag1', 'Lag2', 'EMA_Cross']
 df.dropna(inplace=True)
 
@@ -110,10 +129,18 @@ if should_retrain or "model" not in st.session_state:
 else:
     model = st.session_state.model
 
-# Live prediction
-prediction = model.predict(X_test)[0]
-confidence = model.predict_proba(X_test)[0][prediction]
+# Signal selection
+if use_price_action:
+    df['Signal'] = df['Price_Action_Signal'].replace({1: 2, 0: 1})
+else:
+    X = df[features]
+    df['Signal'] = model.predict(X)
 
+# Live prediction
+latest_signal = df['Signal'].iloc[-1]
+latest_confidence = model.predict_proba(X_test)[0][latest_signal] if not use_price_action else 1.0
+
+# Price overview
 current_price = df['close'].iloc[-1]
 seven_day_high = df['high'].tail(7 * 24).max()
 seven_day_low = df['low'].tail(7 * 24).min()
@@ -122,8 +149,8 @@ col1, col2 = st.columns(2)
 with col1:
     st.subheader("⚔️ ML Signal")
     direction_map = {0: "Sell", 1: "Hold", 2: "Buy"}
-    st.metric("Prediction", direction_map[prediction])
-    st.metric("Confidence", f"{confidence:.2f}")
+    st.metric("Prediction", direction_map[latest_signal])
+    st.metric("Confidence", f"{latest_confidence:.2f}")
     st.metric("Stop Loss", f"${df['ATR'].iloc[-1] * 1.5:.2f}")
     st.metric("Take Profit", f"${df['ATR'].iloc[-1] * 2.5:.2f}")
     st.write(f"Signal Time: {df['datetime'].iloc[-1].strftime('%I:%M %p')}")
@@ -134,43 +161,13 @@ with col2:
     st.metric("7-Day High", f"${seven_day_high:.2f}")
     st.metric("7-Day Low", f"${seven_day_low:.2f}")
 
+# 🌐 Macro Overlay (static for now)
+st.subheader("🌐 Macro Overlay")
+macro_col1, macro_col2, macro_col3 = st.columns(3)
+macro_col1.metric("DXY (Dollar Index)", "106.12")
+macro_col2.metric("US CPI YoY", "3.7%")
+macro_col3.metric("Fed Funds Rate", "5.50%")
+st.caption("Next macro event: US CPI release on Oct 10, 2025")
+
 # Strategy simulation
-X = df[features]
-df['Signal'] = model.predict(X)
-df['Position'] = df['Signal'].replace({0: -1, 1: 0, 2: 1})
-df['Market_Return'] = df['Return']
-df['Strategy_Return'] = df['Position'].shift(1) * df['Market_Return']
-df['Cumulative_Market'] = (1 + df['Market_Return']).cumprod()
-df['Cumulative_Strategy'] = (1 + df['Strategy_Return']).cumprod()
-
-# Performance metrics
-total_trades = df['Position'].diff().abs().sum()
-win_trades = df[df['Strategy_Return'] > 0].shape[0]
-loss_trades = df[df['Strategy_Return'] < 0].shape[0]
-win_rate = win_trades / (win_trades + loss_trades) if (win_trades + loss_trades) > 0 else 0
-avg_gain = df[df['Strategy_Return'] > 0]['Strategy_Return'].mean()
-avg_loss = df[df['Strategy_Return'] < 0]['Strategy_Return'].mean()
-sharpe = df['Strategy_Return'].mean() / df['Strategy_Return'].std() * np.sqrt(252)
-
-st.subheader("📊 Strategy Performance")
-fig, ax = plt.subplots(figsize=(10, 4))
-ax.plot(df['datetime'], df['Cumulative_Market'], label='Market', color='gray')
-ax.plot(df['datetime'], df['Cumulative_Strategy'], label='Strategy', color='blue')
-ax.set_title("Cumulative Returns")
-ax.legend()
-st.pyplot(fig)
-
-col1, col2, col3, col4 = st.columns(4)
-col1.metric("Win Rate", f"{win_rate:.2%}")
-col2.metric("Avg Gain", f"{avg_gain:.4f}")
-col3.metric("Avg Loss", f"{avg_loss:.4f}")
-col4.metric("Sharpe Ratio", f"{sharpe:.2f}")
-
-# Trade log
-log_df = df[['datetime', 'Signal', 'Strategy_Return', 'ATR']].copy()
-log_df['Direction'] = log_df['Signal'].replace({0: 'Sell', 1: 'Hold', 2: 'Buy'})
-log_df['Confidence'] = model.predict_proba(X)[np.arange(len(X)), df['Signal']]
-log_df['Stop_Loss'] = log_df['ATR'] * 1.5
-log_df['Take_Profit'] = log_df['ATR'] * 2.5
-log_df['Strategy_Return'] = log_df['Strategy_Return'].round(4)
-log_df = log_df[['datetime', 'Direction', 'Confidence', 'Stop_Loss', 'Take_Profit', 'Strategy_Return']]
+df['Position'] = df['Signal'].replace({0: -1, 1
