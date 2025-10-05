@@ -13,7 +13,7 @@ st_autorefresh(interval=60000, limit=None, key="refresh")
 
 # Streamlit layout
 st.set_page_config(layout="wide")
-st.title("📡 XAUUSD ML Signal Dashboard")
+st.title("📉 XAUUSD ML Signal Dashboard")
 
 # Sidebar controls
 st.sidebar.title("🧠 Model Selector")
@@ -132,13 +132,13 @@ else:
 # Signal selection
 if use_price_action:
     df['Signal'] = df['Price_Action_Signal'].replace({1: 2, 0: 1})
+    latest_signal = df['Signal'].iloc[-1]
+    latest_confidence = 1.0
 else:
     X = df[features]
     df['Signal'] = model.predict(X)
-
-# Live prediction
-latest_signal = df['Signal'].iloc[-1]
-latest_confidence = model.predict_proba(X_test)[0][latest_signal] if not use_price_action else 1.0
+    latest_signal = df['Signal'].iloc[-1]
+    latest_confidence = model.predict_proba(X_test)[0][latest_signal]
 
 # Price overview
 current_price = df['close'].iloc[-1]
@@ -147,7 +147,7 @@ seven_day_low = df['low'].tail(7 * 24).min()
 
 col1, col2 = st.columns(2)
 with col1:
-    st.subheader("⚔️ ML Signal")
+    st.subheader("⚔️ Signal")
     direction_map = {0: "Sell", 1: "Hold", 2: "Buy"}
     st.metric("Prediction", direction_map[latest_signal])
     st.metric("Confidence", f"{latest_confidence:.2f}")
@@ -171,3 +171,4 @@ st.caption("Next macro event: US CPI release on Oct 10, 2025")
 
 # Strategy simulation
 df['Position'] = df['Signal'].replace({0: -1, 1: 0, 2: 1})
+df['Market_Return'] = df
