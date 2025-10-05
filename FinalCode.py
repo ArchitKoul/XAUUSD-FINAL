@@ -177,3 +177,13 @@ log_df = log_df[['datetime', 'Direction', 'Confidence', 'Stop_Loss', 'Take_Profi
 
 st.subheader("📋 Trade Log")
 st.dataframe(log_df.tail(20).reset_index(drop=True), use_container_width=True)
+
+st.subheader("🌐 Macro Overlay")
+
+macro_col1, macro_col2, macro_col3 = st.columns(3)
+macro_col1.metric("DXY (Dollar Index)", "106.12")  # placeholder
+macro_col2.metric("US CPI YoY", "3.7%")            # placeholder
+macro_col3.metric("Fed Funds Rate", "5.50%")       # placeholder
+
+st.caption("Next macro event: US CPI release on Oct 10, 2025")
+
