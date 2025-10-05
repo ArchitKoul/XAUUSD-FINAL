@@ -228,6 +228,7 @@ ATR_THRESHOLD = st.sidebar.slider("ATR Threshold (Backtest Filter)", min_value=5
 def load_backtest_data():
     url = "https://raw.githubusercontent.com/ArchitKoul/XAUUSD-FINAL/main/XAUUSD%2030%20Min%20TF%20-%20Sheet1.csv"
     df = pd.read_csv(url)
+    df.columns = [col.lower() for col in df.columns]
     df['datetime'] = pd.to_datetime(df['Date'], format="%Y.%m.%d %H:%M")
     df = df.sort_values('datetime')
     df[['Open', 'High', 'Low', 'Close']] = df[['Open', 'High', 'Low', 'Close']].astype(float)
