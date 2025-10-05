@@ -22,6 +22,12 @@ url = f"https://api.twelvedata.com/time_series?symbol={symbol}&interval={interva
 response = requests.get(url)
 data = response.json()
 
+# Error handling
+if 'values' not in data:
+    st.error("❌ API Error: No data returned. Check your API key, symbol, or usage limits.")
+    st.stop()
+
+# Convert to DataFrame
 df = pd.DataFrame(data['values'])
 df['datetime'] = pd.to_datetime(df['datetime'])
 df = df.sort_values('datetime')
@@ -57,7 +63,7 @@ df['ATR'] = tr.ewm(com=14, min_periods=14).mean()
 df['ADX'] = df['close'].rolling(window=14).mean()  # Simplified
 df['Volatility'] = df['close'].rolling(window=20).std()
 
-# Label future movement
+# Label future movement (remapped for XGBoost)
 df['Target'] = np.where(df['close'].shift(-1) > df['close'], 2,
                 np.where(df['close'].shift(-1) < df['close'], 0, 1))
 
@@ -73,11 +79,9 @@ model = XGBClassifier(n_estimators=100, max_depth=4, learning_rate=0.1)
 model.fit(X_train, y_train)
 
 # Live prediction
+latest = X.iloc[-1:]
 prediction = model.predict(latest)[0]
 confidence = model.predict_proba(latest)[0][prediction]
-
-direction_map = {0: "Sell", 1: "Hold", 2: "Buy"}
-st.metric("Prediction", direction_map[prediction])
 
 # Current price and 7-day high/low
 current_price = df['close'].iloc[-1]
@@ -88,8 +92,9 @@ seven_day_low = df['low'].tail(7 * 24).min()
 col1, col2 = st.columns(2)
 
 with col1:
-    st.subheader("📈 ML Signal")
-    st.metric("Prediction", "Buy" if prediction == 1 else "Sell" if prediction == -1 else "Hold")
+    st.subheader("⚔️ ML Signal")
+    direction_map = {0: "Sell", 1: "Hold", 2: "Buy"}
+    st.metric("Prediction", direction_map[prediction])
     st.metric("Confidence", f"{confidence:.2f}")
     st.metric("Stop Loss", f"${df['ATR'].iloc[-1] * 1.5:.2f}")
     st.metric("Take Profit", f"${df['ATR'].iloc[-1] * 2.5:.2f}")
