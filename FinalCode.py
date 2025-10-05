@@ -221,7 +221,7 @@ st.subheader("📋 Trade Log")
 st.dataframe(log_df.tail(20).reset_index(drop=True), use_container_width=True)
 
 # Sidebar ATR filter
-ATR_THRESHOLD = st.sidebar.slider("ATR Threshold (Volatility Filter)", min_value=5, max_value=30, value=15)
+ATR_THRESHOLD = st.sidebar.slider("ATR Threshold (Backtest Filter)", min_value=5, max_value=30, value=15)
 
 # Load CSV from GitHub
 @st.cache_data
