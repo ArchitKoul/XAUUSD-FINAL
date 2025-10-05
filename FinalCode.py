@@ -105,3 +105,42 @@ with col2:
     st.metric("Current Price", f"${current_price:.2f}")
     st.metric("7-Day High", f"${seven_day_high:.2f}")
     st.metric("7-Day Low", f"${seven_day_low:.2f}")
+
+##
+# Strategy simulation
+df['Signal'] = model.predict(X)
+df['Position'] = df['Signal'].replace({0: -1, 1: 0, 2: 1})  # Sell, Hold, Buy
+df['Market_Return'] = df['Return']
+df['Strategy_Return'] = df['Position'].shift(1) * df['Market_Return']
+
+# Cumulative returns
+df['Cumulative_Market'] = (1 + df['Market_Return']).cumprod()
+df['Cumulative_Strategy'] = (1 + df['Strategy_Return']).cumprod()
+
+# Performance metrics
+total_trades = df['Position'].diff().abs().sum()
+win_trades = df[df['Strategy_Return'] > 0].shape[0]
+loss_trades = df[df['Strategy_Return'] < 0].shape[0]
+win_rate = win_trades / (win_trades + loss_trades) if (win_trades + loss_trades) > 0 else 0
+avg_gain = df[df['Strategy_Return'] > 0]['Strategy_Return'].mean()
+avg_loss = df[df['Strategy_Return'] < 0]['Strategy_Return'].mean()
+sharpe = df['Strategy_Return'].mean() / df['Strategy_Return'].std() * np.sqrt(252)
+
+# Plot cumulative performance
+import matplotlib.pyplot as plt
+
+st.subheader("📊 Strategy Performance")
+
+fig, ax = plt.subplots(figsize=(10, 4))
+ax.plot(df['datetime'], df['Cumulative_Market'], label='Market', color='gray')
+ax.plot(df['datetime'], df['Cumulative_Strategy'], label='Strategy', color='blue')
+ax.set_title("Cumulative Returns")
+ax.legend()
+st.pyplot(fig)
+
+# Display metrics
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Win Rate", f"{win_rate:.2%}")
+col2.metric("Avg Gain", f"{avg_gain:.4f}")
+col3.metric("Avg Loss", f"{avg_loss:.4f}")
+col4.metric("Sharpe Ratio", f"{sharpe:.2f}")
