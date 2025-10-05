@@ -81,3 +81,15 @@ st.metric("Confidence Score", f"{signal['Confidence']}/4")
 st.metric("Stop Loss", f"${signal['SL']:.2f}")
 st.metric("Take Profit", f"${signal['TP']:.2f}")
 st.write(f"Signal Time: {signal['Time']}")
+
+import plotly.graph_objects as go
+
+fig = go.Figure(data=[go.Candlestick(
+    x=df['datetime'],
+    open=df['open'],
+    high=df['high'],
+    low=df['low'],
+    close=df['close']
+)])
+fig.update_layout(title="XAUUSD Candlestick", xaxis_title="Time", yaxis_title="Price")
+st.plotly_chart(fig, use_container_width=True)
