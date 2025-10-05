@@ -154,4 +154,65 @@ else:
 
 # Candlestick chart with timeframe filter
 chart_url = f"https://api.twelvedata.com/time_series?symbol=XAU/USD&interval={chart_interval}&apikey={API_KEY}&outputsize=100"
-chart_data = requests.get(chart_url).
+chart_data = requests.get(chart_url).json()
+if 'values' in chart_data:
+    chart_df = pd.DataFrame(chart_data['values'])
+    chart_df['datetime'] = pd.to_datetime(chart_df['datetime'])
+    chart_df = chart_df.sort_values('datetime')
+    chart_df[['open', 'high', 'low', 'close']] = chart_df[['open', 'high', 'low', 'close']].astype(float)
+
+    fig = go.Figure(data=[go.Candlestick(
+        x=chart_df['datetime'],
+        open=chart_df['open'],
+        high=chart_df['high'],
+        low=chart_df['low'],
+        close=chart_df['close']
+    )])
+    fig.update_layout(title=f"XAUUSD Candlestick Chart ({chart_interval})", xaxis_rangeslider_visible=False)
+    st.subheader("📈 XAUUSD Chart")
+    st.plotly_chart(fig, use_container_width=True)
+else:
+    st.warning("Unable to load chart data.")
+
+# Strategy simulation
+df['Position'] = df['Signal'].replace({0: -1, 1: 0, 2: 1})
+df['Market_Return'] = df['Return']
+df['Strategy_Return'] = df['Position'].shift(1) * df['Market_Return']
+df['Cumulative_Market'] = (1 + df['Market_Return']).cumprod()
+df['Cumulative_Strategy'] = (1 + df['Strategy_Return']).cumprod()
+
+# Strategy performance metrics
+win_trades = df[df['Strategy_Return'] > 0].shape[0]
+loss_trades = df[df['Strategy_Return'] < 0].shape[0]
+win_rate = win_trades / (win_trades + loss_trades) if (win_trades + loss_trades) > 0 else 0
+avg_gain = df[df['Strategy_Return'] > 0]['Strategy_Return'].mean()
+avg_loss = df[df['Strategy_Return'] < 0]['Strategy_Return'].mean()
+sharpe = df['Strategy_Return'].mean() / df['Strategy_Return'].std() * np.sqrt(252)
+
+# Plot cumulative performance
+st.subheader("📊 Strategy Performance")
+fig_perf, ax = plt.subplots(figsize=(10, 4))
+ax.plot(df['datetime'], df['Cumulative_Market'], label='Market', color='gray')
+ax.plot(df['datetime'], df['Cumulative_Strategy'], label='Strategy', color='blue')
+ax.set_title("Cumulative Returns")
+ax.legend()
+st.pyplot(fig_perf)
+
+# Display metrics
+col1, col2, col3, col4 = st.columns(4)
+col1.metric("Win Rate", f"{win_rate:.2%}")
+col2.metric("Avg Gain", f"{avg_gain:.4f}")
+col3.metric("Avg Loss", f"{avg_loss:.4f}")
+col4.metric("Sharpe Ratio", f"{sharpe:.2f}")
+
+# Trade log
+log_df = df[['datetime', 'Signal', 'Strategy_Return', 'ATR', 'Confidence']].copy()
+log_df['Direction'] = log_df['Signal'].replace({0: 'Sell', 1: 'Hold', 2: 'Buy'})
+log_df['Stop_Loss'] = log_df['ATR'] * 1.5
+log_df['Take_Profit'] = log_df['ATR'] * 2.5
+log_df['Strategy_Return'] = log_df['Strategy_Return'].round(4)
+log_df['Confidence'] = log_df['Confidence'].round(4)
+log_df = log_df[['datetime', 'Direction', 'Confidence', 'Stop_Loss', 'Take_Profit', 'Strategy_Return']]
+
+st.subheader("📋 Trade Log")
+st.dataframe(log_df.tail(20).reset_index(drop=True), use_container_width=True)
