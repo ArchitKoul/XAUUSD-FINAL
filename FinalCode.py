@@ -220,99 +220,27 @@ log_df = log_df[['datetime', 'Direction', 'Confidence', 'Stop_Loss', 'Take_Profi
 st.subheader("📋 Trade Log")
 st.dataframe(log_df.tail(20).reset_index(drop=True), use_container_width=True)
 
-# US Open Sell Strategy with Volatility Filter
-if enable_us_open_strategy:
-    # Convert to US Eastern Time
-    df['datetime_utc'] = df['datetime'].dt.tz_localize('UTC')
-    df['datetime_est'] = df['datetime_utc'].dt.tz_convert('US/Eastern')
-    df['date'] = df['datetime_est'].dt.date
-    df['time'] = df['datetime_est'].dt.time
+# Sidebar ATR filter
+ATR_THRESHOLD = st.sidebar.slider("ATR Threshold (Volatility Filter)", min_value=5, max_value=30, value=15)
 
-    # Strategy parameters
-    SL = 100
-    TP = 200
-    ATR_THRESHOLD = 10
-
-    us_open_trades = []
-    for date in df['date'].unique():
-        day_df = df[df['date'] == date]
-        entry_row = day_df[(day_df['time'] >= pd.to_datetime("10:00:00").time())].head(1)
-        if not entry_row.empty:
-            atr_value = entry_row['ATR'].values[0]
-            if atr_value < ATR_THRESHOLD:
-                continue  # Skip low-volatility days
-
-            entry_price = entry_row['open'].values[0]
-            sl = entry_price + SL
-            tp = entry_price - TP
-            trade_df = day_df[day_df['datetime_est'] > entry_row['datetime_est'].values[0]]
-            exit_price = None
-            for _, row in trade_df.iterrows():
-                if row['high'] >= sl:
-                    exit_price = sl
-                    result = -SL
-                    break
-                elif row['low'] <= tp:
-                    exit_price = tp
-                    result = TP
-                    break
-            if exit_price is None:
-                exit_price = trade_df['close'].values[-1]
-                result = entry_price - exit_price
-            us_open_trades.append({
-                'date': date,
-                'entry': entry_price,
-                'exit': exit_price,
-                'pnl': result,
-                'atr': atr_value
-            })
-
-    strategy_df = pd.DataFrame(us_open_trades)
-
-    if strategy_df.empty or 'pnl' not in strategy_df.columns:
-        st.warning("No trades met the volatility filter. Try lowering the ATR threshold or check data availability.")
-    else:
-        strategy_df['cumulative'] = strategy_df['pnl'].cumsum()
-
-        st.subheader("📉 US Open 30-Min Sell Strategy (Volatility Filtered)")
-        st.line_chart(strategy_df.set_index('date')['cumulative'])
-
-        win_rate = (strategy_df['pnl'] > 0).mean()
-        avg_gain = strategy_df[strategy_df['pnl'] > 0]['pnl'].mean()
-        avg_loss = strategy_df[strategy_df['pnl'] < 0]['pnl'].mean()
-        sharpe = strategy_df['pnl'].mean() / strategy_df['pnl'].std() * np.sqrt(252)
-
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Win Rate", f"{win_rate:.2%}")
-        col2.metric("Avg Gain", f"{avg_gain:.2f}")
-        col3.metric("Avg Loss", f"{avg_loss:.2f}")
-        col4.metric("Sharpe Ratio", f"{sharpe:.2f}")
-
-        st.subheader("📋 US Open Strategy Trade Log")
-        st.dataframe(strategy_df.tail(20).reset_index(drop=True), use_container_width=True)
-
-import kagglehub
-
-# Load 2-year XAUUSD 30-min data from Kaggle
+# Load CSV from GitHub
 @st.cache_data
-def load_data():
-    path = kagglehub.dataset_download("novandraanugrah/xauusd-gold-price-historical-data-2004-2024")
-    csv_path = path + "/XAUUSD_30m.csv"  # Confirm this filename matches
-    df = pd.read_csv(csv_path)
-    df['datetime'] = pd.to_datetime(df['datetime'])
+def load_backtest_data():
+    url = "https://raw.githubusercontent.com/ArchitKoul/XAUUSD-FINAL/main/XAUUSD%2030%20Min%20TF%20-%20Sheet1.csv"
+    df = pd.read_csv(url)
+    df['datetime'] = pd.to_datetime(df['Date'], format="%Y.%m.%d %H:%M")
     df = df.sort_values('datetime')
+    df[['Open', 'High', 'Low', 'Close']] = df[['Open', 'High', 'Low', 'Close']].astype(float)
+    df['datetime_gmt'] = df['datetime'].dt.tz_localize('Etc/GMT-2')  # Assuming GMT+2
+    df['datetime_est'] = df['datetime_gmt'].dt.tz_convert('US/Eastern')
+    df['date'] = df['datetime_est'].dt.date
+    df['month'] = df['datetime_est'].dt.to_period('M')
     return df
 
-df = load_data()
+df = load_backtest_data()
 
 # Filter last 2 years
 df = df[df['datetime'] >= pd.Timestamp.now() - pd.DateOffset(years=2)]
-
-# Convert to US Eastern Time
-df['datetime_utc'] = df['datetime'].dt.tz_localize('UTC')
-df['datetime_est'] = df['datetime_utc'].dt.tz_convert('US/Eastern')
-df['date'] = df['datetime_est'].dt.date
-df['month'] = df['datetime_est'].dt.to_period('M')
 
 # Calculate ATR
 tr = pd.concat([
@@ -325,7 +253,6 @@ df['ATR'] = tr.ewm(span=14).mean()
 # Strategy parameters
 SL = 100
 TP = 200
-ATR_THRESHOLD = st.sidebar.slider("ATR Threshold (Volatility Filter)", min_value=5, max_value=30, value=15)
 
 # Simulate strategy
 results = []
