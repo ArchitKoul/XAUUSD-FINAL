@@ -87,22 +87,24 @@ df['Volatility'] = df['close'].rolling(window=20).std()
 df['Target'] = np.where(df['close'].shift(-1) > df['close'], 2,
                 np.where(df['close'].shift(-1) < df['close'], 0, 1))
 
-# Price action features
+# Expanded price action features
 df['Body'] = np.abs(df['close'] - df['open'])
 df['Upper_Wick'] = df['high'] - df[['close', 'open']].max(axis=1)
 df['Lower_Wick'] = df[['close', 'open']].min(axis=1) - df['low']
+
 df['Bullish_Engulfing'] = ((df['close'] > df['open']) & 
                            (df['close'].shift(1) < df['open'].shift(1)) &
                            (df['close'] > df['open'].shift(1)) &
                            (df['open'] < df['close'].shift(1))).astype(int)
-df['Bearish_Engulfing'] = ((df['close'] < df['open']) & 
-                           (df['close'].shift(1) > df['open'].shift(1)) &
-                           (df['close'] < df['open'].shift(1)) &
-                           (df['open'] > df['close'].shift(1))).astype(int)
-df['Price_Action_Signal'] = (
-    (df['close'] > df['high'].shift(1)) & 
-    (df['Bullish_Engulfing'] == 1)
-).astype(int)
+
+df['Breakout'] = (df['close'] > df['high'].shift(3)).astype(int)
+
+df['Reversal'] = ((df['Lower_Wick'] > df['Body'] * 1.5) & 
+                  (df['close'] > df['open'])).astype(int)
+
+df['Price_Action_Signal'] = ((df['Bullish_Engulfing'] == 1) | 
+                             (df['Breakout'] == 1) | 
+                             (df['Reversal'] == 1)).astype(int)
 
 features = ['RSI', 'MACD', 'ADX', 'ATR', 'Volatility', 'Lag1', 'Lag2', 'EMA_Cross']
 df.dropna(inplace=True)
@@ -133,12 +135,14 @@ else:
 if use_price_action:
     df['Signal'] = df['Price_Action_Signal'].replace({1: 2, 0: 1})
     latest_signal = df['Signal'].iloc[-1]
-    latest_confidence = 1.0
+    df['Confidence'] = (df['Body'] / df['ATR']).clip(0, 1)
+    latest_confidence = df['Confidence'].iloc[-1]
 else:
     X = df[features]
     df['Signal'] = model.predict(X)
     latest_signal = df['Signal'].iloc[-1]
     latest_confidence = model.predict_proba(X_test)[0][latest_signal]
+    df['Confidence'] = model.predict_proba(X)[np.arange(len(X)), df['Signal']]
 
 # Price overview
 current_price = df['close'].iloc[-1]
@@ -202,12 +206,12 @@ col3.metric("Avg Loss", f"{avg_loss:.4f}")
 col4.metric("Sharpe Ratio", f"{sharpe:.2f}")
 
 # Trade log
-log_df = df[['datetime', 'Signal', 'Strategy_Return', 'ATR']].copy()
+log_df = df[['datetime', 'Signal', 'Strategy_Return', 'ATR', 'Confidence']].copy()
 log_df['Direction'] = log_df['Signal'].replace({0: 'Sell', 1: 'Hold', 2: 'Buy'})
-log_df['Confidence'] = model.predict_proba(X)[np.arange(len(X)), df['Signal']] if not use_price_action else 1.0
 log_df['Stop_Loss'] = log_df['ATR'] * 1.5
 log_df['Take_Profit'] = log_df['ATR'] * 2.5
 log_df['Strategy_Return'] = log_df['Strategy_Return'].round(4)
+log_df['Confidence'] = log_df['Confidence'].round(4)
 log_df = log_df[['datetime', 'Direction', 'Confidence', 'Stop_Loss', 'Take_Profit', 'Strategy_Return']]
 
 st.subheader("📋 Trade Log")
