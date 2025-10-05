@@ -228,15 +228,17 @@ ATR_THRESHOLD = st.sidebar.slider("ATR Threshold (Backtest Filter)", min_value=5
 def load_backtest_data():
     url = "https://raw.githubusercontent.com/ArchitKoul/XAUUSD-FINAL/main/XAUUSD%2030%20Min%20TF%20-%20Sheet1.csv"
     df = pd.read_csv(url)
-    df.columns = [col.lower() for col in df.columns]
-    df['datetime'] = pd.to_datetime(df['Date'], format="%Y.%m.%d %H:%M")
-    df = df.sort_values('datetime')
-    df[['Open', 'High', 'Low', 'Close']] = df[['Open', 'High', 'Low', 'Close']].astype(float)
-    df['datetime_gmt'] = df['datetime'].dt.tz_localize('Etc/GMT-2')  # Assuming GMT+2
-    df['datetime_est'] = df['datetime_gmt'].dt.tz_convert('US/Eastern')
-    df['date'] = df['datetime_est'].dt.date
-    df['month'] = df['datetime_est'].dt.to_period('M')
-    return df
+df.columns = [col.strip().lower() for col in df.columns]  # Normalize column names
+st.write("Columns in CSV:", df.columns.tolist())  # Debug print
+
+df['datetime'] = pd.to_datetime(df['date'], format="%Y.%m.%d %H:%M")
+df = df.sort_values('datetime')
+df[['open', 'high', 'low', 'close']] = df[['open', 'high', 'low', 'close']].astype(float)
+df['datetime_gmt'] = df['datetime'].dt.tz_localize('Etc/GMT-2')  # Assuming GMT+2
+df['datetime_est'] = df['datetime_gmt'].dt.tz_convert('US/Eastern')
+df['date'] = df['datetime_est'].dt.date
+df['month'] = df['datetime_est'].dt.to_period('M')
+
 
 df = load_backtest_data()
 
