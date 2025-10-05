@@ -219,9 +219,7 @@ st.subheader("📋 Trade Log")
 st.dataframe(log_df.tail(20).reset_index(drop=True), use_container_width=True)
 
 # US Open Sell Strategy with Volatility Filter
-if st.sidebar.checkbox("Enable US Open Sell Strategy"):
-    import pytz
-
+if enable_us_open_strategy:
     # Convert to US Eastern Time
     df['datetime_utc'] = df['datetime'].dt.tz_localize('UTC')
     df['datetime_est'] = df['datetime_utc'].dt.tz_convert('US/Eastern')
@@ -267,24 +265,26 @@ if st.sidebar.checkbox("Enable US Open Sell Strategy"):
                 'atr': atr_value
             })
 
-    # Convert to DataFrame
     strategy_df = pd.DataFrame(us_open_trades)
-    strategy_df['cumulative'] = strategy_df['pnl'].cumsum()
 
-    # Display results
-    st.subheader("📉 US Open 30-Min Sell Strategy (Volatility Filtered)")
-    st.line_chart(strategy_df.set_index('date')['cumulative'])
+    if strategy_df.empty or 'pnl' not in strategy_df.columns:
+        st.warning("No trades met the volatility filter. Try lowering the ATR threshold or check data availability.")
+    else:
+        strategy_df['cumulative'] = strategy_df['pnl'].cumsum()
 
-    win_rate = (strategy_df['pnl'] > 0).mean()
-    avg_gain = strategy_df[strategy_df['pnl'] > 0]['pnl'].mean()
-    avg_loss = strategy_df[strategy_df['pnl'] < 0]['pnl'].mean()
-    sharpe = strategy_df['pnl'].mean() / strategy_df['pnl'].std() * np.sqrt(252)
+        st.subheader("📉 US Open 30-Min Sell Strategy (Volatility Filtered)")
+        st.line_chart(strategy_df.set_index('date')['cumulative'])
 
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Win Rate", f"{win_rate:.2%}")
-    col2.metric("Avg Gain", f"{avg_gain:.2f}")
-    col3.metric("Avg Loss", f"{avg_loss:.2f}")
-    col4.metric("Sharpe Ratio", f"{sharpe:.2f}")
+        win_rate = (strategy_df['pnl'] > 0).mean()
+        avg_gain = strategy_df[strategy_df['pnl'] > 0]['pnl'].mean()
+        avg_loss = strategy_df[strategy_df['pnl'] < 0]['pnl'].mean()
+        sharpe = strategy_df['pnl'].mean() / strategy_df['pnl'].std() * np.sqrt(252)
 
-    st.subheader("📋 US Open Strategy Trade Log")
-    st.dataframe(strategy_df.tail(20).reset_index(drop=True), use_container_width=True)
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Win Rate", f"{win_rate:.2%}")
+        col2.metric("Avg Gain", f"{avg_gain:.2f}")
+        col3.metric("Avg Loss", f"{avg_loss:.2f}")
+        col4.metric("Sharpe Ratio", f"{sharpe:.2f}")
+
+        st.subheader("📋 US Open Strategy Trade Log")
+        st.dataframe(strategy_df.tail(20).reset_index(drop=True), use_container_width=True)
