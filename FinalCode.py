@@ -58,8 +58,8 @@ df['ADX'] = df['close'].rolling(window=14).mean()  # Simplified
 df['Volatility'] = df['close'].rolling(window=20).std()
 
 # Label future movement
-df['Target'] = np.where(df['close'].shift(-1) > df['close'], 1,
-                np.where(df['close'].shift(-1) < df['close'], -1, 0))
+df['Target'] = np.where(df['close'].shift(-1) > df['close'], 2,
+                np.where(df['close'].shift(-1) < df['close'], 0, 1))
 
 # ML features
 features = ['RSI', 'MACD', 'ADX', 'ATR', 'Volatility', 'Lag1', 'Lag2', 'EMA_Cross']
@@ -73,9 +73,11 @@ model = XGBClassifier(n_estimators=100, max_depth=4, learning_rate=0.1)
 model.fit(X_train, y_train)
 
 # Live prediction
-latest = X.iloc[-1:]
 prediction = model.predict(latest)[0]
-confidence = model.predict_proba(latest)[0][abs(prediction)]
+confidence = model.predict_proba(latest)[0][prediction]
+
+direction_map = {0: "Sell", 1: "Hold", 2: "Buy"}
+st.metric("Prediction", direction_map[prediction])
 
 # Current price and 7-day high/low
 current_price = df['close'].iloc[-1]
