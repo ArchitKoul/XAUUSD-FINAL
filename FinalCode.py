@@ -217,3 +217,74 @@ log_df = log_df[['datetime', 'Direction', 'Confidence', 'Stop_Loss', 'Take_Profi
 
 st.subheader("📋 Trade Log")
 st.dataframe(log_df.tail(20).reset_index(drop=True), use_container_width=True)
+
+# US Open Sell Strategy with Volatility Filter
+if st.sidebar.checkbox("Enable US Open Sell Strategy"):
+    import pytz
+
+    # Convert to US Eastern Time
+    df['datetime_utc'] = df['datetime'].dt.tz_localize('UTC')
+    df['datetime_est'] = df['datetime_utc'].dt.tz_convert('US/Eastern')
+    df['date'] = df['datetime_est'].dt.date
+    df['time'] = df['datetime_est'].dt.time
+
+    # Strategy parameters
+    SL = 100
+    TP = 200
+    ATR_THRESHOLD = 15
+
+    us_open_trades = []
+    for date in df['date'].unique():
+        day_df = df[df['date'] == date]
+        entry_row = day_df[(day_df['time'] >= pd.to_datetime("10:00:00").time())].head(1)
+        if not entry_row.empty:
+            atr_value = entry_row['ATR'].values[0]
+            if atr_value < ATR_THRESHOLD:
+                continue  # Skip low-volatility days
+
+            entry_price = entry_row['open'].values[0]
+            sl = entry_price + SL
+            tp = entry_price - TP
+            trade_df = day_df[day_df['datetime_est'] > entry_row['datetime_est'].values[0]]
+            exit_price = None
+            for _, row in trade_df.iterrows():
+                if row['high'] >= sl:
+                    exit_price = sl
+                    result = -SL
+                    break
+                elif row['low'] <= tp:
+                    exit_price = tp
+                    result = TP
+                    break
+            if exit_price is None:
+                exit_price = trade_df['close'].values[-1]
+                result = entry_price - exit_price
+            us_open_trades.append({
+                'date': date,
+                'entry': entry_price,
+                'exit': exit_price,
+                'pnl': result,
+                'atr': atr_value
+            })
+
+    # Convert to DataFrame
+    strategy_df = pd.DataFrame(us_open_trades)
+    strategy_df['cumulative'] = strategy_df['pnl'].cumsum()
+
+    # Display results
+    st.subheader("📉 US Open 30-Min Sell Strategy (Volatility Filtered)")
+    st.line_chart(strategy_df.set_index('date')['cumulative'])
+
+    win_rate = (strategy_df['pnl'] > 0).mean()
+    avg_gain = strategy_df[strategy_df['pnl'] > 0]['pnl'].mean()
+    avg_loss = strategy_df[strategy_df['pnl'] < 0]['pnl'].mean()
+    sharpe = strategy_df['pnl'].mean() / strategy_df['pnl'].std() * np.sqrt(252)
+
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Win Rate", f"{win_rate:.2%}")
+    col2.metric("Avg Gain", f"{avg_gain:.2f}")
+    col3.metric("Avg Loss", f"{avg_loss:.2f}")
+    col4.metric("Sharpe Ratio", f"{sharpe:.2f}")
+
+    st.subheader("📋 US Open Strategy Trade Log")
+    st.dataframe(strategy_df.tail(20).reset_index(drop=True), use_container_width=True)
