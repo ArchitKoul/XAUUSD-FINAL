@@ -73,9 +73,23 @@ df.dropna(inplace=True)
 X = df[features]
 y = df['Target']
 
-# Train model
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, shuffle=False)
-model = XGBClassifier(n_estimators=100, max_depth=4, learning_rate=0.1)
+# Walk-forward retraining setup
+window_size = 300
+df = df.tail(window_size + 1)  # +1 for prediction
+
+train_df = df.iloc[:-1]
+test_df = df.iloc[-1:]
+
+X_train = train_df[features]
+y_train = train_df['Target']
+X_test = test_df[features]
+
+# Train selected model
+if model_choice == "XGBoost":
+    model = XGBClassifier(n_estimators=100, max_depth=4, learning_rate=0.1)
+elif model_choice == "Logistic Regression":
+    model = LogisticRegression(max_iter=1000)
+
 model.fit(X_train, y_train)
 
 # Live prediction
