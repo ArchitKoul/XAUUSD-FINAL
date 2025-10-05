@@ -290,3 +290,99 @@ if enable_us_open_strategy:
 
         st.subheader("📋 US Open Strategy Trade Log")
         st.dataframe(strategy_df.tail(20).reset_index(drop=True), use_container_width=True)
+
+import kagglehub
+
+# Load 2-year XAUUSD 30-min data from Kaggle
+@st.cache_data
+def load_data():
+    path = kagglehub.dataset_download("novandraanugrah/xauusd-gold-price-historical-data-2004-2024")
+    csv_path = path + "/XAUUSD_30m.csv"  # Confirm this filename matches
+    df = pd.read_csv(csv_path)
+    df['datetime'] = pd.to_datetime(df['datetime'])
+    df = df.sort_values('datetime')
+    return df
+
+df = load_data()
+
+# Filter last 2 years
+df = df[df['datetime'] >= pd.Timestamp.now() - pd.DateOffset(years=2)]
+
+# Convert to US Eastern Time
+df['datetime_utc'] = df['datetime'].dt.tz_localize('UTC')
+df['datetime_est'] = df['datetime_utc'].dt.tz_convert('US/Eastern')
+df['date'] = df['datetime_est'].dt.date
+df['month'] = df['datetime_est'].dt.to_period('M')
+
+# Calculate ATR
+tr = pd.concat([
+    df['high'] - df['low'],
+    abs(df['high'] - df['close'].shift()),
+    abs(df['low'] - df['close'].shift())
+], axis=1).max(axis=1)
+df['ATR'] = tr.ewm(span=14).mean()
+
+# Strategy parameters
+SL = 100
+TP = 200
+ATR_THRESHOLD = st.sidebar.slider("ATR Threshold (Volatility Filter)", min_value=5, max_value=30, value=15)
+
+# Simulate strategy
+results = []
+for date in df['date'].unique():
+    day_df = df[df['date'] == date]
+    entry_row = day_df[(day_df['datetime_est'].dt.time >= pd.to_datetime("10:00:00").time())].head(1)
+    if not entry_row.empty and entry_row['ATR'].values[0] > ATR_THRESHOLD:
+        entry_price = entry_row['open'].values[0]
+        sl = entry_price + SL
+        tp = entry_price - TP
+        trade_df = day_df[day_df['datetime_est'] > entry_row['datetime_est'].values[0]]
+        exit_price = None
+        for _, row in trade_df.iterrows():
+            if row['high'] >= sl:
+                exit_price = sl
+                pnl = -SL
+                break
+            elif row['low'] <= tp:
+                exit_price = tp
+                pnl = TP
+                break
+        if exit_price is None:
+            exit_price = trade_df['close'].values[-1]
+            pnl = entry_price - exit_price
+        results.append({
+            'date': date,
+            'month': pd.to_datetime(date).to_period('M'),
+            'entry': entry_price,
+            'exit': exit_price,
+            'pnl': pnl
+        })
+
+# Convert to DataFrame
+bt_df = pd.DataFrame(results)
+
+if bt_df.empty:
+    st.warning("No trades met the volatility filter. Try lowering the ATR threshold or check data availability.")
+else:
+    # Monthly performance
+    monthly = bt_df.groupby('month').agg({
+        'pnl': ['sum', 'count']
+    })
+    monthly.columns = ['Total_PnL', 'Trade_Count']
+    monthly['Win_Rate'] = bt_df.groupby('month')['pnl'].apply(lambda x: (x > 0).mean())
+    monthly['Percent_Gain'] = (monthly['Total_PnL'] / 10000) * 100  # Assuming $10,000 base capital
+
+    # Display results
+    st.subheader("📊 Monthly Backtest Results (US Open Sell Strategy)")
+    st.bar_chart(monthly['Total_PnL'])
+
+    st.dataframe(monthly.reset_index(), use_container_width=True)
+
+    # Cumulative performance
+    bt_df['cumulative'] = bt_df['pnl'].cumsum()
+    st.subheader("📈 Cumulative Strategy Performance")
+    fig, ax = plt.subplots(figsize=(10, 4))
+    ax.plot(bt_df['date'], bt_df['cumulative'], label='Cumulative PnL', color='orange')
+    ax.set_title("US Open Strategy Cumulative Returns")
+    ax.legend()
+    st.pyplot(fig)
