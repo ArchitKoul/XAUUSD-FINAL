@@ -170,4 +170,4 @@ macro_col3.metric("Fed Funds Rate", "5.50%")
 st.caption("Next macro event: US CPI release on Oct 10, 2025")
 
 # Strategy simulation
-df['Position'] = df['Signal'].replace({0: -1, 1
+df['Position'] = df['Signal'].replace({0: -1, 1}
