@@ -85,7 +85,7 @@ test_df = df.iloc[-1:]
 
 X_train = train_df[features]
 y_train = train_df['Target']
-X_test = test_df[features].to_frame().T
+X_test = test_df[features].to_frame() if isinstance(test_df[features], pd.Series) else test_df[features]
 
 # Train selected model
 if model_choice == "XGBoost":
