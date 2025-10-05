@@ -83,6 +83,10 @@ latest = X.iloc[-1:]
 prediction = model.predict(latest)[0]
 confidence = model.predict_proba(latest)[0][prediction]
 
+direction_map = {0: "Sell", 1: "Hold", 2: "Buy"}
+st.metric("Prediction", direction_map[prediction])
+st.metric("Confidence", f"{confidence:.2f}")
+
 # Current price and 7-day high/low
 current_price = df['close'].iloc[-1]
 seven_day_high = df['high'].tail(7 * 24).max()
@@ -105,6 +109,20 @@ with col2:
     st.metric("Current Price", f"${current_price:.2f}")
     st.metric("7-Day High", f"${seven_day_high:.2f}")
     st.metric("7-Day Low", f"${seven_day_low:.2f}")
+
+from sklearn.linear_model import LogisticRegression
+
+# Model selector
+st.sidebar.title("🧠 Model Selector")
+model_choice = st.sidebar.selectbox("Choose ML Model", ["XGBoost", "Logistic Regression"])
+
+# Train selected model
+if model_choice == "XGBoost":
+    model = XGBClassifier(n_estimators=100, max_depth=4, learning_rate=0.1)
+elif model_choice == "Logistic Regression":
+    model = LogisticRegression(max_iter=1000)
+
+model.fit(X_train, y_train)
 
 ##
 # Strategy simulation
